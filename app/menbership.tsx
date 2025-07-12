@@ -97,7 +97,7 @@ const Membership: React.FC<MembershipProps> = () => {
                     />
                     <View style={styles.priceContainer}>
                         <Text style={[styles.price, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>{price}</Text>
-                        <Text style={[styles.priceMonth, { color: dark ? COLORS.greyscale300 : COLORS.grayscale700 }]}>{" "}{period}</Text>
+                        <Text style={[styles.priceMonth, { color: dark ? COLORS.greyscale300 : COLORS.grayscale700 }]}> {period}</Text>
                     </View>
                 </View>
                 <View style={styles.premiumItemContainer}>

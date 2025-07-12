@@ -425,13 +425,9 @@ const Login = () => {
                             />
                         </View>
                         <View style={styles.signupContainer}>
-                            <Text style={[styles.signupText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>
-                                Don&apos;t have an account?{' '}
-                            </Text>
-                            <TouchableOpacity onPress={() => navigate('signup')}>
-                                <Text style={[styles.signupLink, { color: dark ? COLORS.primary : COLORS.primary }]}>
-                                    Sign Up
-                                </Text>
+                            <Text style={[styles.signupText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>Don&apos;t have an account?</Text>
+                            <TouchableOpacity onPress={() => navigate('signup')} style={{ marginLeft: 4 }}>
+                                <Text style={[styles.signupLink, { color: dark ? COLORS.primary : COLORS.primary }]}>Sign Up</Text>
                             </TouchableOpacity>
                         </View>
                     </ScrollView>
