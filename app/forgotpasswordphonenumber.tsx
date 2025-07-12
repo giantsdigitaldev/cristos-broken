@@ -192,8 +192,9 @@ const ForgotPasswordPhoneNumber = () => {
                         color: dark ? COLORS.white : COLORS.black
                     }]}>Don&apos;t have an account ?</Text>
                     <TouchableOpacity
-                        onPress={() => navigate("signup")}>
-                        <Text style={styles.bottomRight}>{" "}Sign Up</Text>
+                        onPress={() => navigate("signup")}
+                        style={{ marginLeft: 4 }}>
+                        <Text style={styles.bottomRight}>Sign Up</Text>
                     </TouchableOpacity>
                 </View>
             </View>

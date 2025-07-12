@@ -49,9 +49,7 @@ const InboxTeamVoiceCall = () => {
                                 tintColor: dark ? COLORS.white : COLORS.black
                             }]} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, {
-                        color: dark ? COLORS.white : COLORS.black
-                    }]}>{" "}</Text>
+                    <View style={{ width: 8 }} />
                 </View>
                 <View style={styles.viewRightContainer}>
                     <TouchableOpacity>

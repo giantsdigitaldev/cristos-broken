@@ -71,7 +71,7 @@ const ReviewSummary = () => {
                             />
                             <View style={styles.priceContainer}>
                                 <Text style={[styles.price, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>$9.99</Text>
-                                <Text style={[styles.priceMonth, { color: dark ? COLORS.white : COLORS.grayscale700, }]}>{" "}/month</Text>
+                                <Text style={[styles.priceMonth, { color: dark ? COLORS.white : COLORS.grayscale700 }]}>/month</Text>
                             </View>
                         </View>
                         <View style={styles.premiumItemContainer}>

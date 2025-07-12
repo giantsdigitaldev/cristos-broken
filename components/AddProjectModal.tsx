@@ -2270,4 +2270,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AddProjectModal; 
+export default AddProjectModal;
