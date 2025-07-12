@@ -1,0 +1,104 @@
+{
+  "startTime": "2025-07-02T10:55:37.903Z",
+  "endTime": "2025-07-02T10:56:22.424Z",
+  "totalTests": 7,
+  "passedTests": 4,
+  "failedTests": 3,
+  "errors": [],
+  "screenshots": [
+    {
+      "name": "login-page",
+      "filename": "login-page-2025-07-02T10-55-42-512Z.png",
+      "filepath": "screenshots/login-page-2025-07-02T10-55-42-512Z.png",
+      "timestamp": "2025-07-02T10:55:42.620Z"
+    },
+    {
+      "name": "new-project-page",
+      "filename": "new-project-page-2025-07-02T10-56-16-519Z.png",
+      "filepath": "screenshots/new-project-page-2025-07-02T10-56-16-519Z.png",
+      "timestamp": "2025-07-02T10:56:16.630Z"
+    },
+    {
+      "name": "responsive-mobile",
+      "filename": "responsive-mobile-2025-07-02T10-56-17-148Z.png",
+      "filepath": "screenshots/responsive-mobile-2025-07-02T10-56-17-148Z.png",
+      "timestamp": "2025-07-02T10:56:17.243Z"
+    },
+    {
+      "name": "responsive-tablet",
+      "filename": "responsive-tablet-2025-07-02T10-56-17-746Z.png",
+      "filepath": "screenshots/responsive-tablet-2025-07-02T10-56-17-746Z.png",
+      "timestamp": "2025-07-02T10:56:18.224Z"
+    },
+    {
+      "name": "responsive-desktop",
+      "filename": "responsive-desktop-2025-07-02T10-56-18-726Z.png",
+      "filepath": "screenshots/responsive-desktop-2025-07-02T10-56-18-726Z.png",
+      "timestamp": "2025-07-02T10:56:18.835Z"
+    }
+  ],
+  "testDetails": [
+    {
+      "name": "Authentication & User Login",
+      "passed": false,
+      "duration": 33767,
+      "error": "Waiting for selector `.dashboard, .home-screen, [data-testid=\"dashboard\"]` failed: Waiting failed: 30000ms exceeded",
+      "timestamp": "2025-07-02T10:56:12.901Z"
+    },
+    {
+      "name": "Project Management",
+      "passed": false,
+      "duration": 3734,
+      "error": "No element found for selector: input[name=\"name\"], input[placeholder*=\"project name\"]",
+      "timestamp": "2025-07-02T10:56:16.636Z"
+    },
+    {
+      "name": "Task Management",
+      "passed": true,
+      "duration": 2,
+      "error": null,
+      "timestamp": "2025-07-02T10:56:16.638Z"
+    },
+    {
+      "name": "Team Features",
+      "passed": false,
+      "duration": 1,
+      "error": "Failed to execute 'querySelector' on 'Document': 'button:contains(\"Invite\"), [data-testid=\"invite-member\"]' is not a valid selector.",
+      "timestamp": "2025-07-02T10:56:16.639Z"
+    },
+    {
+      "name": "Communication Features",
+      "passed": true,
+      "duration": 1,
+      "error": null,
+      "timestamp": "2025-07-02T10:56:16.640Z"
+    },
+    {
+      "name": "UI/UX Testing",
+      "passed": true,
+      "duration": 2197,
+      "error": null,
+      "timestamp": "2025-07-02T10:56:18.837Z"
+    },
+    {
+      "name": "Data Validation",
+      "passed": true,
+      "duration": 3587,
+      "error": null,
+      "timestamp": "2025-07-02T10:56:22.424Z"
+    }
+  ],
+  "duration": 44521,
+  "summary": {
+    "totalTests": 7,
+    "passedTests": 4,
+    "failedTests": 3,
+    "successRate": "57.14%"
+  },
+  "recommendations": [
+    "Review failed tests and fix identified issues",
+    "Review screenshots for visual verification",
+    "Test with different user accounts if available",
+    "Consider performance testing for larger datasets"
+  ]
+}

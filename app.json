@@ -1,0 +1,99 @@
+{
+  "expo": {
+    "name": "cristOS Beta",
+    "slug": "cristos-beta-01",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "cristosjuly2025v3",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.giantsdigital.christosjuly03",
+      "buildNumber": "3",
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to take photos for tasks and projects.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select images for tasks and projects.",
+        "NSLocationWhenInUseUsageDescription": "This app uses location to show nearby tasks and projects.",
+        "NSMicrophoneUsageDescription": "This app uses the microphone for voice notes and calls.",
+        "NSContactsUsageDescription": "This app accesses your contacts to invite team members to projects.",
+        "NSCalendarsUsageDescription": "This app accesses your calendar to schedule tasks and deadlines.",
+        "NSRemindersUsageDescription": "This app accesses your reminders to sync with task deadlines.",
+        "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication.",
+        "NSLocalNetworkUsageDescription": "This app uses local network for real-time collaboration features.",
+        "UIBackgroundModes": [
+          "background-fetch",
+          "background-processing"
+        ]
+      },
+      "runtimeVersion": "1.0.0",
+      "associatedDomains": [
+        "applinks:cristos.ai",
+        "applinks:www.cristos.ai",
+        "applinks:ios.cristos.ai"
+      ]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.giantsdigital.christosjuly03",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "cristos.ai",
+              "pathPrefix": "/confirm-email"
+            },
+            {
+              "scheme": "https",
+              "host": "www.cristos.ai",
+              "pathPrefix": "/confirm-email"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png",
+      "bundleSplitting": true,
+      "treeshaking": true,
+      "minifyOnBundle": true
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3dc72d45-c230-4bdf-9016-67418df277df"
+      }
+    },
+    "owner": "aevansdev"
+  }
+}

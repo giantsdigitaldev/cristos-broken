@@ -1,0 +1,1046 @@
+
+// Dynamic import to avoid Node.js TypeScript resolution issues
+// import { GPTMessage, GPTService } from './gpt4o-mini-service';
+import { MetadataOptimizer } from '../metadataOptimizer';
+
+export interface StabilityAIGenerationRequest {
+    text_prompts: Array<{
+      text: string;
+      weight: number;
+    }>;
+    cfg_scale: number;
+    height: number;
+    width: number;
+    samples: number;
+    steps: number;
+    style_preset?: string;
+  }
+  
+  export interface StabilityAIGenerationResponse {
+    artifacts: Array<{
+      base64: string;
+      seed: number;
+      finishReason: string;
+    }>;
+  }
+  
+  export interface ProjectCoverImageData {
+    projectId: string;
+    imageUrl: string;
+    prompt: string;
+    generatedAt: string;
+    status: 'generating' | 'completed' | 'failed';
+    error?: string;
+    compressionMetadata?: {
+      originalSizeKB: number;
+      compressedSizeKB: number;
+      compressionQuality: number;
+      compressionRatio: number;
+    };
+  }
+
+  export interface GeneratedImageData {
+    id: string;
+    imageUrl: string;
+    prompt: string;
+    seed: number;
+    finishReason: string;
+    generatedAt: string;
+    status: 'completed' | 'failed';
+    error?: string;
+    compressionMetadata?: {
+      originalSizeKB: number;
+      compressedSizeKB: number;
+      compressionQuality: number;
+      compressionRatio: number;
+    };
+  }
+  
+  export class StabilityAIService {
+    private static readonly API_BASE_URL = 'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image';
+    private static readonly API_KEY = process.env.EXPO_PUBLIC_STABLITY_API_KEY;
+  
+    // Technical blueprint settings optimized for engineering diagrams
+    private static readonly GENERATION_CONFIG = {
+      cfg_scale: 12, // Strong prompt adherence for technical accuracy
+      height: 1024, // Native SDXL resolution for maximum quality
+      width: 1024,  // Native SDXL resolution for maximum quality
+      samples: 4,   // Generate 4 images
+      steps: 50,    // Maximum allowed by Stability AI API
+      style_preset: 'digital-art' as const // Better for technical drawings and schematics
+    };
+  
+    // Constants for compression
+    private static readonly COMPRESSION_CONFIG = {
+      targetSizeKB: { min: 50, max: 150 },
+      dimensions: { width: 800, height: 450 }, // 16:9 aspect ratio (800/450 = 1.778)
+      compressionLevels: [0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3]
+    };
+  
+    /**
+     * Generate multiple project cover images using Stability AI
+     */
+    static async generateProjectCoverImages(
+      projectTitle: string,
+      projectDescription: string,
+      projectCategory: string,
+      projectId: string
+    ): Promise<GeneratedImageData[]> {
+      console.log('🎨 [StabilityAIService] Starting multiple image generation for project:', {
+        projectId,
+        title: projectTitle,
+        description: projectDescription,
+        category: projectCategory
+      });
+  
+      try {
+        if (!this.API_KEY) {
+          console.error('❌ [StabilityAIService] Stability AI API key not found');
+          return [];
+        }
+  
+        console.log('✅ [StabilityAIService] API key found, proceeding with generation');
+  
+        // Generate the prompt using GPT-4o-mini
+        console.log('🔄 [StabilityAIService] Generating prompt with GPT-4o-mini...');
+        const prompt = await this.generateStabilityPrompt(projectTitle, projectDescription, projectCategory);
+        
+        if (!prompt) {
+          console.error('❌ [StabilityAIService] Failed to generate scene description for Stability AI');
+          return [];
+        }
+  
+        console.log('✅ [StabilityAIService] Scene description generated successfully:', prompt.substring(0, 100) + '...');
+  
+        // Call Stability AI API with scene description
+        const apiResult = await this.callStabilityAI(prompt);
+        if (!apiResult.success || !apiResult.artifacts || apiResult.artifacts.length === 0) {
+          console.error('❌ [StabilityAIService] No artifacts returned from Stability AI:', apiResult.error);
+          return [];
+        }
+  
+        console.log(`✅ [StabilityAIService] Received ${apiResult.artifacts.length} artifacts from Stability AI`);
+  
+        // Upload all images to storage
+        const uploadedImages: GeneratedImageData[] = [];
+        
+        for (let i = 0; i < apiResult.artifacts.length; i++) {
+          const artifact = apiResult.artifacts[i];
+          console.log(`🔄 [StabilityAIService] Processing image ${i + 1}/${apiResult.artifacts.length}...`);
+          console.log(`📊 [StabilityAIService] Image ${i + 1} data:`, {
+            seed: artifact.seed,
+            finishReason: artifact.finishReason,
+            base64Length: artifact.base64?.length || 0
+          });
+          
+          try {
+            console.log(`🔄 [StabilityAIService] Uploading image ${i + 1} to storage...`);
+            const uploadResult = await this.uploadImageToStorage(artifact.base64, projectId, i);
+            
+            const imageData: GeneratedImageData = {
+              id: `${projectId}-${Date.now()}-${i}`,
+              imageUrl: uploadResult.imageUrl,
+              prompt,
+              seed: artifact.seed,
+              finishReason: artifact.finishReason,
+              generatedAt: new Date().toISOString(),
+              status: 'completed',
+              compressionMetadata: uploadResult.compressionMetadata
+            };
+            
+            uploadedImages.push(imageData);
+            console.log(`✅ [StabilityAIService] Image ${i + 1} uploaded successfully:`, uploadResult.imageUrl);
+          } catch (error) {
+            console.error(`❌ [StabilityAIService] Failed to upload image ${i + 1}:`, error);
+            // Continue with other images even if one fails
+          }
+        }
+  
+        console.log(`✅ [StabilityAIService] Successfully processed ${uploadedImages.length}/${apiResult.artifacts.length} images`);
+        return uploadedImages;
+  
+      } catch (error) {
+        console.error('❌ [StabilityAIService] Error generating project cover images:', error);
+        return [];
+      }
+    }
+
+    /**
+     * Generate a single project cover image (backward compatibility)
+     */
+    static async generateProjectCoverImage(
+      projectTitle: string,
+      projectDescription: string,
+      projectCategory: string,
+      projectId: string
+    ): Promise<ProjectCoverImageData | null> {
+      console.log('🎨 [StabilityAIService] Starting single image generation for project:', {
+        projectId,
+        title: projectTitle,
+        description: projectDescription,
+        category: projectCategory
+      });
+  
+      try {
+        if (!this.API_KEY) {
+          console.error('❌ [StabilityAIService] Stability AI API key not found');
+          return null;
+        }
+  
+        console.log('✅ [StabilityAIService] API key found, proceeding with generation');
+  
+        // Generate the prompt using GPT-4o-mini
+        console.log('🔄 [StabilityAIService] Generating prompt with GPT-4o-mini...');
+        const prompt = await this.generateStabilityPrompt(projectTitle, projectDescription, projectCategory);
+        
+        if (!prompt) {
+          console.error('❌ [StabilityAIService] Failed to generate scene description for Stability AI');
+          return null;
+        }
+  
+        console.log('✅ [StabilityAIService] Scene description generated successfully:', prompt.substring(0, 100) + '...');
+  
+        // Call Stability AI API with scene description
+        const apiResult = await this.callStabilityAI(prompt);
+        if (!apiResult.success || !apiResult.artifacts || apiResult.artifacts.length === 0) {
+          return this.createErrorResponse(projectId, prompt, apiResult.error || 'No artifacts returned');
+        }
+  
+        console.log(`✅ [StabilityAIService] Received ${apiResult.artifacts.length} artifacts from Stability AI`);
+  
+        // Upload first image to storage
+        const uploadResult = await this.uploadImageToStorage(apiResult.artifacts[0].base64, projectId);
+  
+        // Create and return image data
+        const imageData: ProjectCoverImageData = {
+          projectId,
+          imageUrl: uploadResult.imageUrl,
+          prompt,
+          generatedAt: new Date().toISOString(),
+          status: 'completed',
+          compressionMetadata: uploadResult.compressionMetadata
+        };
+  
+        return imageData;
+  
+      } catch (error) {
+        console.error('❌ [StabilityAIService] Error generating project cover image:', error);
+        return this.createErrorResponse(projectId, '', error instanceof Error ? error.message : 'Unknown error');
+      }
+    }
+  
+    /**
+     * Call Stability AI API with the given prompt
+     */
+    private static async callStabilityAI(sceneDescription: string): Promise<{ success: boolean; artifacts?: any[]; error?: string }> {
+      console.log('🔄 [StabilityAIService] Calling Stability AI API...');
+      const startTime = Date.now();
+      
+      // Combine scene description with styling prompt
+      const promptData = this.combineSceneWithStyling(sceneDescription);
+      
+      // Validate and truncate prompt to meet API limits
+      const validatedPrompt = this.validateAndTruncatePrompt(promptData.positive);
+      const validatedNegativePrompt = this.validateAndTruncatePrompt(promptData.negative);
+      
+      console.log('🎨 [StabilityAIService] Combined prompt for Stability AI:', validatedPrompt.substring(0, 150) + '...');
+      console.log('📏 [StabilityAIService] Prompt length:', validatedPrompt.length, 'characters');
+      
+      const request: StabilityAIGenerationRequest = {
+        text_prompts: [
+          { text: validatedPrompt, weight: 1 },
+          { text: validatedNegativePrompt, weight: -1 } // Negative prompt with negative weight
+        ],
+        ...this.GENERATION_CONFIG
+      };
+      
+      const response = await fetch(this.API_BASE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.API_KEY}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(request)
+      });
+  
+      const endTime = Date.now();
+      const generationTime = (endTime - startTime) / 1000;
+      console.log(`⏱️ [StabilityAIService] API call completed in ${generationTime.toFixed(2)} seconds`);
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ [StabilityAIService] Stability AI API error:', response.status, errorText);
+        return { success: false, error: `API Error: ${response.status} - ${errorText}` };
+      }
+  
+      console.log('✅ [StabilityAIService] Stability AI API call successful');
+      const data: StabilityAIGenerationResponse = await response.json();
+      
+      if (!data.artifacts || data.artifacts.length === 0) {
+        console.error('❌ [StabilityAIService] No artifacts returned from Stability AI');
+        return { success: false, error: 'No artifacts returned from API' };
+      }
+  
+      return { success: true, artifacts: data.artifacts };
+    }
+
+    /**
+     * Validate and truncate prompt to meet API limits
+     */
+    private static validateAndTruncatePrompt(prompt: string, maxLength: number = 1800): string {
+      if (prompt.length <= maxLength) {
+        return prompt;
+      }
+      
+      console.log(`⚠️ [StabilityAIService] Prompt too long (${prompt.length} chars), truncating to ${maxLength} chars`);
+      
+      // Try to truncate intelligently by removing less important modifiers first
+      const modifiersToRemove = [
+        ', award winning photography',
+        ', professional grade',
+        ', realistic materials',
+        ', detailed shadows',
+        ', lifelike',
+        ', vibrant',
+        ', natural colors',
+        ', professional camera, Canon EOS R5',
+        ', bokeh',
+        ', depth of field',
+        ', studio lighting',
+        ', perfect composition',
+        ', detailed textures',
+        ', high definition',
+        ', best quality',
+        ', masterpiece',
+        ', photorealistic',
+        ', natural skin texture',
+        ', cinematic lighting',
+        ', professional photography',
+        ', sharp focus',
+        ', 8K resolution',
+        ', highly detailed',
+        ', ultra-realistic'
+      ];
+      
+      let truncatedPrompt = prompt;
+      
+      for (const modifier of modifiersToRemove) {
+        if (truncatedPrompt.length <= maxLength) {
+          break;
+        }
+        truncatedPrompt = truncatedPrompt.replace(modifier, '');
+      }
+      
+      // If still too long, truncate at word boundary
+      if (truncatedPrompt.length > maxLength) {
+        truncatedPrompt = truncatedPrompt.substring(0, maxLength);
+        const lastSpaceIndex = truncatedPrompt.lastIndexOf(' ');
+        if (lastSpaceIndex > maxLength * 0.8) { // Only truncate at space if it's not too far back
+          truncatedPrompt = truncatedPrompt.substring(0, lastSpaceIndex);
+        }
+      }
+      
+      console.log(`✅ [StabilityAIService] Truncated prompt length: ${truncatedPrompt.length} chars`);
+      return truncatedPrompt;
+    }
+  
+    /**
+     * Create error response with consistent structure
+     */
+    private static createErrorResponse(projectId: string, prompt: string, error: string): ProjectCoverImageData {
+      return {
+        projectId,
+        imageUrl: '',
+        prompt,
+        generatedAt: new Date().toISOString(),
+        status: 'failed',
+        error
+      };
+    }
+  
+    /**
+     * Generate a detailed prompt for Stability AI using GPT-4o-mini
+     */
+    private static async generateStabilityPrompt(
+      projectTitle: string,
+      projectDescription: string,
+      projectCategory: string
+    ): Promise<string> {
+      console.log('🔄 [StabilityAIService] Generating prompt with GPT-4o-mini for:', {
+        title: projectTitle,
+        description: projectDescription,
+        category: projectCategory
+      });
+      
+      try {
+        const systemPrompt = this.getSystemPrompt();
+        const userPrompt = `Project Title: ${projectTitle}
+  Project Description: ${projectDescription}
+  Project Category: ${projectCategory}
+  
+  Generate a detailed prompt for creating a project cover image that represents this project visually.`;
+  
+        // Use dynamic import to avoid Node.js TypeScript resolution issues
+        try {
+          const { GPTService } = await import('./gpt4o-mini-service');
+          
+          const messages = [
+            { role: 'system' as const, content: systemPrompt },
+            { role: 'user' as const, content: userPrompt }
+          ];
+  
+          console.log('🔄 [StabilityAIService] Calling GPT-4o-mini API...');
+          const response = await GPTService.callGPTAPI(messages, {
+            temperature: 0.8,
+            max_tokens: 150
+          });
+  
+          if (!response.success || !response.message) {
+            console.error('❌ [StabilityAIService] Failed to get response from GPT service');
+            return this.createFallbackPrompt(projectTitle, projectDescription, projectCategory);
+          }
+  
+          console.log('✅ [StabilityAIService] GPT scene description generated successfully');
+          return response.message.trim();
+          
+        } catch (importError) {
+          console.error('❌ [StabilityAIService] Failed to import GPT service:', importError);
+          return this.createFallbackPrompt(projectTitle, projectDescription, projectCategory);
+        }
+  
+      } catch (error) {
+        console.error('❌ [StabilityAIService] Error generating Stability AI prompt:', error);
+        return this.createFallbackPrompt(projectTitle, projectDescription, projectCategory);
+      }
+    }
+  
+    /**
+     * Get the system prompt for image generation
+     */
+    private static getSystemPrompt(): string {
+      return `You are an expert at creating concise technical scene descriptions for AI image generation, specializing in technical schematics and blueprint-style visuals.
+
+Your task is to describe a technical scene that represents the project, focusing on creating a technical schematic or blueprint-style visualization.
+
+Scene description requirements:
+
+- Focus on creating a technical schematic or blueprint representation
+- Describe the scene as if it's a technical drawing or engineering diagram
+- Include specific technical elements, components, or processes relevant to the project
+- Keep descriptions extremely concise and technical (maximum 50 words)
+- Focus on the core technical aspects of the project
+- Use technical terminology and engineering language
+- IMPORTANT: Compose the scene with the main technical subject in the center
+
+Output format:
+
+Write a concise technical description (maximum 50 words) that captures the essence of the project through a technical schematic or blueprint visualization. Focus on technical elements, components, and processes. Ensure the main technical subject is centered.
+
+Example Usage:
+
+Project Title: Clean my room
+Project Description: To clean my room, make the bed, vacuum.
+
+Technical Scene Description:
+
+A technical schematic showing a bedroom floor plan with labeled cleaning zones. The bed is prominently centered with crisp, geometric lines indicating proper bed-making technique. A vacuum cleaner is positioned strategically with arrows showing optimal cleaning path.
+
+Create a unique, technical scene description based on the project details provided. Keep descriptions under 50 words.`;
+    }
+  
+    /**
+     * Create fallback prompt when GPT service fails
+     */
+    private static createFallbackPrompt(projectTitle: string, projectDescription: string, projectCategory: string): string {
+      const mainElement = [projectTitle, projectDescription, projectCategory].filter(Boolean).join(", ");
+      const fallbackPrompt = `Technical schematics of ${mainElement}, front and side views, on light white blueprint paper, highly detailed, illustration drafting style, conceptual art, steampunk, isometric detailed blueprint, patent illustration, poster design, art illustration, silkscreen risograph, technical drawing, precise linework, clear typography labeling key parts, minimal color, clean background, high-resolution, professional blueprint aesthetic`;
+      console.log('🔄 [StabilityAIService] Using fallback prompt:', fallbackPrompt);
+      return fallbackPrompt;
+    }
+  
+    /**
+     * Combine scene description with styling prompt for Stability AI
+     */
+    private static combineSceneWithStyling(sceneDescription: string): { positive: string; negative: string } {
+      // Shortened technical blueprint-style positive prompt with essential engineering aesthetic
+      const positivePrompt = `${sceneDescription}, technical schematics, blueprint style, engineering diagram, precise linework, clean background, technical drawing, professional blueprint aesthetic, mechanical schematic, technical illustration, patent drawing, engineering notation, blueprint paper texture, technical diagram, precise measurements, minimal color`;
+      
+      // Shortened negative prompt to avoid non-technical elements
+      const negativePrompt = `blurry, low quality, distorted, watermark, signature, oversaturated, cartoon, anime, painting, CGI, 3D render, artificial, fake, plastic, noise, pixelated, low resolution, amateur, cell phone photo, bad anatomy, deformed, extra limbs, fused fingers, mutation, poorly drawn, ugly, photorealistic, realistic, photograph, camera, natural lighting, cinematic, colorful, vibrant colors, artistic, painterly, watercolor, oil painting, digital art, fantasy art, decorative, ornate, fancy`;
+      
+      return {
+        positive: positivePrompt,
+        negative: negativePrompt
+      };
+    }
+
+    /**
+     * Optimize image compression to achieve target file size
+     */
+    private static async optimizeImageCompression(
+      imageUri: string,
+      targetSizeKB: { min: number; max: number } = this.COMPRESSION_CONFIG.targetSizeKB
+    ): Promise<{ blob: Blob; quality: number; fileSizeKB: number }> {
+      try {
+        console.log('🔄 [StabilityAIService] Starting image compression...');
+        
+        // For React Native, we need to handle base64 data differently
+        // Convert base64 to blob directly without using ArrayBuffer/ArrayBufferView
+        if (imageUri.startsWith('data:image/')) {
+          console.log('🔄 [StabilityAIService] Processing data URL...');
+          
+          // Extract base64 data from data URL
+          const base64Data = imageUri.split(',')[1];
+          if (!base64Data) {
+            throw new Error('Invalid data URL format');
+          }
+          
+          // React Native compatible blob creation using fetch
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          
+          const fileSizeKB = blob.size / 1024;
+          console.log(`📊 [StabilityAIService] Original image size: ${fileSizeKB.toFixed(1)}KB`);
+          
+          // If the image is already within target size, return it as is
+          if (fileSizeKB >= targetSizeKB.min && fileSizeKB <= targetSizeKB.max) {
+            console.log(`✅ [StabilityAIService] Image already within target size: ${fileSizeKB.toFixed(1)}KB`);
+            return {
+              blob,
+              quality: 1.0,
+              fileSizeKB
+            };
+          }
+          
+          // For React Native, return the original blob without compression
+          console.log(`⚠️ [StabilityAIService] Using original image without compression: ${fileSizeKB.toFixed(1)}KB`);
+          return {
+            blob,
+            quality: 1.0,
+            fileSizeKB
+          };
+        } else {
+          // Handle file URI (if needed)
+          console.log('🔄 [StabilityAIService] Processing file URI...');
+          const response = await fetch(imageUri);
+          const blob = await response.blob();
+          const fileSizeKB = blob.size / 1024;
+          
+          console.log(`📊 [StabilityAIService] File size: ${fileSizeKB.toFixed(1)}KB`);
+          
+          return {
+            blob,
+            quality: 1.0,
+            fileSizeKB
+          };
+        }
+      } catch (error) {
+        console.error('❌ [StabilityAIService] Error in image compression:', error);
+        throw error;
+      }
+    }
+
+    /**
+     * Upload the generated image to Supabase storage
+     */
+    private static async uploadImageToStorage(
+      base64Data: string, 
+      projectId: string,
+      imageIndex: number = 0
+    ): Promise<{ imageUrl: string; compressionMetadata: ProjectCoverImageData['compressionMetadata'] }> {
+      try {
+        console.log(`🔄 [StabilityAIService] Starting image upload to storage (index: ${imageIndex})...`);
+        const { supabase } = await import('../supabase');
+        
+        // Validate base64 data
+        if (!base64Data || base64Data.length < 100) {
+          throw new Error('Invalid base64 data received from Stability AI');
+        }
+        
+        console.log(`📊 [StabilityAIService] Base64 data length: ${base64Data.length} characters`);
+        
+        // Clean and validate base64 data
+        const cleanedBase64 = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
+        if (cleanedBase64.length !== base64Data.length) {
+          console.warn('⚠️ [StabilityAIService] Base64 data contained invalid characters, cleaned');
+        }
+        
+        // Validate base64 format
+        if (cleanedBase64.length % 4 !== 0) {
+          console.warn('⚠️ [StabilityAIService] Base64 data length is not a multiple of 4, adding padding');
+        }
+        
+        // For React Native, we need to handle base64 differently
+        console.log('🔄 [StabilityAIService] Processing base64 data for React Native...');
+        
+        // Create a data URL for image manipulation
+        const dataUrl = `data:image/png;base64,${cleanedBase64}`;
+        
+        // Use React Native-compatible blob creation
+        console.log('🔄 [StabilityAIService] Creating blob from base64...');
+        let compressedBlob: Blob;
+        let finalFileSizeKB: number;
+        let finalQuality: number;
+        let blobType: string;
+        
+        try {
+          // React Native-compatible blob creation - convert base64 to Uint8Array first
+          console.log('🔄 [StabilityAIService] Converting base64 to Uint8Array...');
+          
+          // Convert base64 to binary array
+          const binaryString = atob(cleanedBase64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          
+          console.log(`📊 [StabilityAIService] Binary array created - Size: ${bytes.length} bytes`);
+          
+          // Create blob from binary array
+          compressedBlob = new Blob([bytes], { type: 'image/png' });
+          finalFileSizeKB = compressedBlob.size / 1024;
+          finalQuality = 1.0;
+          blobType = compressedBlob.type;
+          
+          console.log(`✅ [StabilityAIService] Blob created successfully - Size: ${compressedBlob.size} bytes, Type: ${blobType}`);
+          
+          // Additional validation
+          if (compressedBlob.size === 0) {
+            throw new Error('Generated blob has 0 bytes - base64 conversion failed');
+          }
+          
+          if (compressedBlob.size !== bytes.length) {
+            console.warn(`⚠️ [StabilityAIService] Blob size mismatch: blob=${compressedBlob.size}, bytes=${bytes.length}`);
+          }
+          
+        } catch (blobError) {
+          console.error('❌ [StabilityAIService] React Native blob creation failed:', blobError);
+          
+          // Fallback: try the fetch method as backup
+          try {
+            console.log('🔄 [StabilityAIService] Trying fallback fetch method...');
+            const response = await fetch(dataUrl);
+            compressedBlob = await response.blob();
+            finalFileSizeKB = compressedBlob.size / 1024;
+            finalQuality = 1.0;
+            blobType = compressedBlob.type;
+            
+            console.log(`✅ [StabilityAIService] Fallback blob creation successful - Size: ${compressedBlob.size} bytes`);
+          } catch (fallbackError) {
+            console.error('❌ [StabilityAIService] Fallback blob creation also failed:', fallbackError);
+            const errorMessage = blobError instanceof Error ? blobError.message : 'Unknown error';
+            throw new Error(`Failed to create blob from base64 data: ${errorMessage}`);
+          }
+        }
+        
+        // Validate the blob before upload
+        if (compressedBlob.size === 0) {
+          throw new Error('Generated blob has 0 bytes - blob creation failed');
+        }
+        
+        // React Native compatible blob validation
+        try {
+          // For React Native, we can't use arrayBuffer() directly
+          // Instead, we'll validate by checking the blob properties
+          console.log(`🔍 [StabilityAIService] Blob validation - Size: ${compressedBlob.size}, Type: ${blobType}`);
+          
+          // Check if blob type is valid
+          if (!blobType || (!blobType.includes('image/'))) {
+            console.warn(`⚠️ [StabilityAIService] Unexpected blob type: ${blobType}, proceeding with image/png`);
+            blobType = 'image/png';
+          }
+          
+          // React Native compatible validation - just check if we can create a response
+          // This is much simpler and more reliable for React Native
+          console.log('✅ [StabilityAIService] Blob validation successful - React Native compatible');
+          
+        } catch (validationError) {
+          console.warn('⚠️ [StabilityAIService] Could not validate blob content:', validationError);
+          // Continue with upload even if validation fails
+        }
+        
+        // Generate unique filename with correct extension based on blob type
+        const timestamp = Date.now();
+        const extension = blobType.includes('jpeg') ? 'jpg' : 'png';
+        const filename = `${projectId}-${timestamp}-${imageIndex}.${extension}`;
+        const filePath = `project-covers/${filename}`;
+        
+        console.log('📁 [StabilityAIService] Uploading compressed image to:', filePath);
+        console.log(`📊 [StabilityAIService] File size: ${finalFileSizeKB.toFixed(1)}KB, Quality: ${finalQuality}, Type: ${blobType}`);
+        
+        // Upload with retry logic for better reliability
+        let uploadData;
+        let uploadError;
+        const maxRetries = 3;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            console.log(`🔄 [StabilityAIService] Upload attempt ${attempt}/${maxRetries}...`);
+            console.log(`📊 [StabilityAIService] Uploading blob - Size: ${compressedBlob.size}, Type: ${blobType}`);
+            
+            // Ensure blob is properly formatted for React Native
+            // Don't create a new blob, use the original one
+            console.log(`📊 [StabilityAIService] Using original blob - Size: ${compressedBlob.size}, Type: ${compressedBlob.type}`);
+            
+            // Verify blob is valid before upload
+            if (compressedBlob.size === 0) {
+              throw new Error('Blob has 0 bytes - cannot upload empty file');
+            }
+            
+            // Log blob details for debugging
+            console.log(`🔍 [StabilityAIService] Blob details:`, {
+              size: compressedBlob.size,
+              type: compressedBlob.type
+            });
+            
+            const uploadResult = await supabase.storage
+              .from('project-files')
+              .upload(filePath, compressedBlob, {
+                contentType: blobType,
+                cacheControl: '3600',
+                upsert: false
+              });
+            
+            uploadData = uploadResult.data;
+            uploadError = uploadResult.error;
+            
+            if (!uploadError) {
+              console.log(`✅ [StabilityAIService] Upload successful on attempt ${attempt}`);
+              console.log('📁 [StabilityAIService] Upload result:', uploadData);
+              break;
+            } else {
+              console.warn(`⚠️ [StabilityAIService] Upload attempt ${attempt} failed:`, uploadError);
+              if (attempt < maxRetries) {
+                // Wait before retry
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+              }
+            }
+          } catch (retryError) {
+            console.error(`❌ [StabilityAIService] Upload attempt ${attempt} threw error:`, retryError);
+            if (attempt < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+            }
+          }
+        }
+        
+        if (uploadError) {
+          console.error('❌ [StabilityAIService] All upload attempts failed:', uploadError);
+          throw new Error(`Upload failed after ${maxRetries} attempts: ${uploadError.message}`);
+        }
+        
+        if (!uploadData) {
+          console.error('❌ [StabilityAIService] No upload data returned from Supabase');
+          throw new Error('Upload failed: No data returned from Supabase storage');
+        }
+        
+        console.log('✅ [StabilityAIService] Compressed image uploaded successfully to storage');
+        console.log('📁 [StabilityAIService] Upload data:', uploadData);
+        
+        // Get the UNSIGNED public URL (this never expires)
+        const { data: urlData } = supabase.storage
+          .from('project-files')
+          .getPublicUrl(filePath);
+        
+        console.log('✅ [StabilityAIService] Generated public URL:', urlData.publicUrl);
+        
+        // Verify the URL is accessible with retry logic
+        let urlVerified = false;
+        const maxUrlRetries = 5; // Increased from 3 to 5
+        
+        for (let attempt = 1; attempt <= maxUrlRetries; attempt++) {
+          try {
+            console.log(`🔄 [StabilityAIService] URL verification attempt ${attempt}/${maxUrlRetries}...`);
+            
+            // Add a delay before verification to allow file to be available
+            // Start with longer delays for early attempts
+            if (attempt > 1) {
+              const delay = attempt === 2 ? 3000 : 5000 * (attempt - 1); // 3s, 10s, 15s, 20s
+              console.log(`⏳ [StabilityAIService] Waiting ${delay}ms before verification...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+            
+            const response = await fetch(urlData.publicUrl, { 
+              method: 'HEAD',
+              // Add timeout for React Native
+              signal: AbortSignal.timeout(20000) // Increased to 20 second timeout
+            });
+            
+            if (response.ok) {
+              const contentLength = response.headers.get('content-length');
+              const uploadedSize = contentLength ? parseInt(contentLength, 10) : 0;
+              
+              console.log('✅ [StabilityAIService] URL verification successful');
+              console.log(`📊 [StabilityAIService] Uploaded file size: ${uploadedSize} bytes (${(uploadedSize / 1024).toFixed(1)}KB)`);
+              
+              // Verify file size matches what we uploaded (with tolerance)
+              const sizeDifference = Math.abs(uploadedSize - compressedBlob.size);
+              const sizeTolerance = 4096; // Increased to 4KB tolerance for React Native
+              
+              if (sizeDifference > sizeTolerance) {
+                console.warn(`⚠️ [StabilityAIService] File size mismatch! Expected: ${compressedBlob.size}, Got: ${uploadedSize}, Difference: ${sizeDifference} bytes`);
+                if (attempt < maxUrlRetries) {
+                  console.log(`🔄 [StabilityAIService] Retrying verification due to size mismatch...`);
+                  continue;
+                }
+              } else {
+                console.log('✅ [StabilityAIService] File size verification successful');
+              }
+              
+              // Verify file is not empty
+              if (uploadedSize === 0) {
+                console.warn('⚠️ [StabilityAIService] Uploaded file has 0 bytes - may indicate upload issue');
+                if (attempt < maxUrlRetries) {
+                  console.log(`🔄 [StabilityAIService] Retrying verification due to empty file...`);
+                  continue;
+                }
+              } else {
+                urlVerified = true;
+                console.log('✅ [StabilityAIService] File verification completed successfully');
+                break;
+              }
+            } else {
+              console.warn(`⚠️ [StabilityAIService] URL verification failed with status: ${response.status}`);
+              if (attempt < maxUrlRetries) {
+                console.log(`🔄 [StabilityAIService] Retrying verification due to HTTP error...`);
+                continue;
+              }
+            }
+          } catch (verificationError) {
+            console.warn(`⚠️ [StabilityAIService] URL verification attempt ${attempt} failed:`, verificationError);
+            if (attempt < maxUrlRetries) {
+              console.log(`🔄 [StabilityAIService] Retrying verification due to network error...`);
+              continue;
+            }
+          }
+        }
+        
+        if (!urlVerified) {
+          console.warn('⚠️ [StabilityAIService] URL verification failed after all attempts, but continuing with upload');
+          console.log('🔄 [StabilityAIService] File may be available shortly - continuing with process');
+          console.log('📊 [StabilityAIService] Returning URL for manual verification:', urlData.publicUrl);
+        } else {
+          console.log('✅ [StabilityAIService] URL verification completed successfully');
+        }
+        
+        // Create compression metadata
+        const compressionMetadata = {
+          originalSizeKB: (base64Data.length * 0.75) / 1024, // Approximate original size
+          compressedSizeKB: finalFileSizeKB,
+          compressionQuality: finalQuality,
+          compressionRatio: ((base64Data.length * 0.75) / 1024) / finalFileSizeKB
+        };
+        
+        console.log('📊 [StabilityAIService] Compression results:', compressionMetadata);
+        
+        return {
+          imageUrl: urlData.publicUrl,
+          compressionMetadata
+        };
+      } catch (error) {
+        console.error('❌ [StabilityAIService] Error during image upload:', error);
+        throw error;
+      }
+    }
+  
+    /**
+     * Update project with generated cover image
+     */
+    static async updateProjectWithCoverImage(
+      projectId: string,
+      imageData: ProjectCoverImageData
+    ): Promise<boolean> {
+      try {
+        const { supabase } = await import('../supabase');
+        
+        // Fetch current metadata
+        const { data: project, error: fetchError } = await supabase
+          .from('projects')
+          .select('metadata')
+          .eq('id', projectId)
+          .single();
+          
+        if (fetchError || !project) {
+          console.error('❌ [StabilityAIService] Error fetching current project metadata:', fetchError);
+          return false;
+        }
+        
+        const currentMetadata = project.metadata || {};
+        console.log('🔍 [StabilityAIService] Current metadata:', currentMetadata);
+        
+        // Create new metadata with AI generated cover
+        const newMetadata = {
+          ...currentMetadata,
+          ai_generated_cover: {
+            imageUrl: imageData.imageUrl,
+            prompt: imageData.prompt,
+            generated_at: imageData.generatedAt,
+            status: imageData.status,
+            error: imageData.error,
+            compressionMetadata: imageData.compressionMetadata
+          }
+        };
+        
+        // Optimize metadata to prevent index size issues
+        const optimizedMetadata = MetadataOptimizer.optimizeMetadata(newMetadata);
+        
+        console.log('📊 [StabilityAIService] Original metadata size:', MetadataOptimizer.getMetadataSize(newMetadata), 'bytes');
+        console.log('📊 [StabilityAIService] Optimized metadata size:', MetadataOptimizer.getMetadataSize(optimizedMetadata), 'bytes');
+        
+        // Update project with optimized metadata
+        const { error } = await supabase
+          .from('projects')
+          .update({
+            cover_image_url: imageData.imageUrl,
+            metadata: optimizedMetadata
+          })
+          .eq('id', projectId);
+          
+        if (error) {
+          console.error('❌ [StabilityAIService] Error updating project with cover image:', error);
+          return false;
+        }
+        
+        console.log('✅ [StabilityAIService] Project updated with cover image URL:', imageData.imageUrl);
+        return true;
+      } catch (error) {
+        console.error('❌ [StabilityAIService] Error updating project with cover image:', error);
+        return false;
+      }
+    }
+
+    /**
+     * Save multiple generated images to project metadata
+     */
+    static async saveGeneratedImagesToProject(
+      projectId: string,
+      generatedImages: GeneratedImageData[]
+    ): Promise<boolean> {
+      try {
+        const { supabase } = await import('../supabase');
+        
+        // Fetch current metadata
+        const { data: project, error: fetchError } = await supabase
+          .from('projects')
+          .select('metadata')
+          .eq('id', projectId)
+          .single();
+          
+        if (fetchError || !project) {
+          console.error('❌ [StabilityAIService] Error fetching current project metadata:', fetchError);
+          return false;
+        }
+        
+        const currentMetadata = project.metadata || {};
+        console.log('🔍 [StabilityAIService] Current metadata:', currentMetadata);
+        
+        // Merge generated images into existing metadata
+        const newMetadata = {
+          ...currentMetadata,
+          generated_images: generatedImages,
+          last_generated_at: new Date().toISOString()
+        };
+        
+        // Optimize metadata to prevent index size issues
+        const optimizedMetadata = MetadataOptimizer.optimizeMetadata(newMetadata);
+        
+        console.log('📊 [StabilityAIService] Original metadata size:', MetadataOptimizer.getMetadataSize(newMetadata), 'bytes');
+        console.log('📊 [StabilityAIService] Optimized metadata size:', MetadataOptimizer.getMetadataSize(optimizedMetadata), 'bytes');
+        
+        const { error } = await supabase
+          .from('projects')
+          .update({
+            metadata: optimizedMetadata
+          })
+          .eq('id', projectId);
+          
+        if (error) {
+          console.error('❌ [StabilityAIService] Error updating project with generated images:', error);
+          return false;
+        }
+        
+        console.log('✅ [StabilityAIService] Project updated with generated images');
+        return true;
+      } catch (error) {
+        console.error('❌ [StabilityAIService] Error updating project with generated images:', error);
+        return false;
+      }
+    }
+  
+    /**
+     * Check if project has a generated cover image
+     */
+    static async hasGeneratedCoverImage(projectId: string): Promise<boolean> {
+      try {
+        const { supabase } = await import('../supabase');
+        
+        const { data, error } = await supabase
+          .from('projects')
+          .select('cover_image_url, metadata')
+          .eq('id', projectId)
+          .single();
+  
+        if (error || !data) {
+          return false;
+        }
+  
+        return !!(data.cover_image_url && data.metadata?.ai_generated_cover);
+  
+      } catch (error) {
+        console.error('❌ [StabilityAIService] Error checking generated cover image:', error);
+        return false;
+      }
+    }
+
+    /**
+     * Get generated images for a project
+     */
+    static async getGeneratedImages(projectId: string): Promise<GeneratedImageData[]> {
+      try {
+        const { supabase } = await import('../supabase');
+        
+        const { data, error } = await supabase
+          .from('projects')
+          .select('metadata')
+          .eq('id', projectId)
+          .single();
+  
+        if (error || !data) {
+          return [];
+        }
+  
+        return data.metadata?.generated_images || [];
+  
+      } catch (error) {
+        console.error('❌ [StabilityAIService] Error getting generated images:', error);
+        return [];
+      }
+    }
+
+    /**
+     * Test method to verify React Native compatibility
+     */
+    static async testReactNativeCompatibility(): Promise<boolean> {
+      try {
+        console.log('🧪 [StabilityAIService] Testing React Native compatibility...');
+        
+        // Test with a simple base64 string
+        const testBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='; // 1x1 pixel PNG
+        
+        console.log('🧪 [StabilityAIService] Testing base64 processing...');
+        const dataUrl = `data:image/png;base64,${testBase64}`;
+        
+        // Test if we can create a blob from the data URL
+        const response = await fetch(dataUrl);
+        const blob = await response.blob();
+        
+        console.log('✅ [StabilityAIService] React Native compatibility test passed');
+        console.log('📊 [StabilityAIService] Test blob size:', blob.size, 'bytes');
+        
+        return true;
+      } catch (error) {
+        console.error('❌ [StabilityAIService] React Native compatibility test failed:', error);
+        return false;
+      }
+    }
+  } 

@@ -1,0 +1,62 @@
+{
+  "cli": {
+    "version": ">= 5.9.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "testflight": {
+      "distribution": "store",
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "ios": {
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "testflight": {
+      "ios": {
+        "appleId": "dev@giantsdigital.com",
+        "ascAppId": "6747988014",
+        "appleTeamId": "MV8JJ5BVKC"
+      }
+    },
+    "production": {
+      "ios": {
+        "appleId": "dev@giantsdigital.com",
+        "ascAppId": "6747988014",
+        "appleTeamId": "MV8JJ5BVKC"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./path-to-your-service-account.json",
+        "track": "production"
+      }
+    }
+  }
+} 

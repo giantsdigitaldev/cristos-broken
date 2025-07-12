@@ -1,0 +1,826 @@
+import { COLORS } from '@/constants';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/theme/ThemeProvider';
+import { Task } from '@/utils/projectServiceWrapper';
+import { TeamMember, TeamService } from '@/utils/teamService';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Modal,
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import UserAvatar from './UserAvatar';
+
+const { height: SIZES } = Dimensions.get('window');
+
+interface TaskReassignmentModalProps {
+  visible: boolean;
+  onClose: () => void;
+  task: Task | null;
+  projectId: string;
+  onReassign: (newAssignees: string[]) => void;
+}
+
+const TaskReassignmentModal: React.FC<TaskReassignmentModalProps> = ({
+  visible,
+  onClose,
+  task,
+  projectId,
+  onReassign,
+}) => {
+  const { colors, dark } = useTheme();
+  const { user } = useAuth();
+  
+  console.log('🔍 TaskReassignmentModal: === COMPONENT INITIALIZATION ===');
+  console.log('🔍 TaskReassignmentModal: Props received - visible:', visible, 'task:', task?.title, 'projectId:', projectId);
+  console.log('🔍 TaskReassignmentModal: Platform:', Platform.OS);
+  console.log('🔍 TaskReassignmentModal: Task exists:', !!task);
+  console.log('🔍 TaskReassignmentModal: Task ID:', task?.id);
+  console.log('🔍 TaskReassignmentModal: ProjectId exists:', !!projectId);
+  console.log('🔍 TaskReassignmentModal: ProjectId value:', projectId);
+  console.log('🔍 TaskReassignmentModal: === END INITIALIZATION ===');
+  
+  // State
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingTeamMembers, setLoadingTeamMembers] = useState(false);
+
+  // CI Color palette for diverse icons
+  const iconColors = [
+    COLORS.primary,      // Blue
+    COLORS.success,      // Green
+    COLORS.warning,      // Orange
+    COLORS.info,         // Cyan
+    COLORS.secondary,    // Purple
+    COLORS.tertiary,     // Pink
+  ];
+
+  // Role priority for sorting (higher number = higher priority)
+  const rolePriority = {
+    'lead': 8,
+    'admin': 7,
+    'editor': 6,
+    'creator': 5,
+    'viewer': 4,
+    'vendor': 3,
+    'sponsor': 2,
+    'fyi': 1,
+  };
+
+  // Load team members when modal opens
+  useEffect(() => {
+    console.log('🔍 TaskReassignmentModal: === LOAD TEAM MEMBERS EFFECT ===');
+    console.log('🔍 TaskReassignmentModal: loadTeamMembers useEffect, visible:', visible, 'projectId:', projectId);
+    console.log('🔍 TaskReassignmentModal: Platform:', Platform.OS);
+    console.log('🔍 TaskReassignmentModal: Visible check:', visible);
+    console.log('🔍 TaskReassignmentModal: ProjectId check:', !!projectId);
+    console.log('🔍 TaskReassignmentModal: ProjectId trimmed check:', projectId?.trim() !== '');
+    
+    if (visible && projectId && projectId.trim() !== '') {
+      console.log('🔍 TaskReassignmentModal: ✅ All conditions met - Loading team members');
+      loadTeamMembers();
+    } else if (visible && (!projectId || projectId.trim() === '')) {
+      console.log('❌ TaskReassignmentModal: No valid projectId provided, cannot load team members');
+      console.log('❌ TaskReassignmentModal: ProjectId value:', projectId);
+      console.log('❌ TaskReassignmentModal: ProjectId trimmed:', projectId?.trim());
+    } else if (!visible) {
+      console.log('🔍 TaskReassignmentModal: Modal not visible, skipping team member load');
+    }
+    console.log('🔍 TaskReassignmentModal: === END LOAD TEAM MEMBERS EFFECT ===');
+  }, [visible, projectId]);
+
+  // Debug modal visibility changes
+  useEffect(() => {
+    console.log('🔍 TaskReassignmentModal: === MODAL VISIBILITY EFFECT ===');
+    console.log('🔍 TaskReassignmentModal: Modal visibility changed to:', visible);
+    console.log('🔍 TaskReassignmentModal: Component mounted/updated');
+    console.log('🔍 TaskReassignmentModal: Platform:', Platform.OS);
+    console.log('🔍 TaskReassignmentModal: Task exists:', !!task);
+    console.log('🔍 TaskReassignmentModal: ProjectId exists:', !!projectId);
+    console.log('🔍 TaskReassignmentModal: === END VISIBILITY EFFECT ===');
+  }, [visible, task, projectId]);
+
+  // Initialize selected assignees when task changes
+  useEffect(() => {
+    console.log('🔍 TaskReassignmentModal: === TASK ASSIGNEE EFFECT ===');
+    console.log('🔍 TaskReassignmentModal: Task changed, updating selected assignees');
+    console.log('🔍 TaskReassignmentModal: Task exists:', !!task);
+    console.log('🔍 TaskReassignmentModal: Task assigned_to:', task?.assigned_to);
+    
+    if (task && task.assigned_to) {
+      console.log('🔍 TaskReassignmentModal: Setting selected assignees from task:', task.assigned_to);
+      setSelectedAssignees(task.assigned_to || []);
+    } else {
+      console.log('🔍 TaskReassignmentModal: Clearing selected assignees');
+      setSelectedAssignees([]);
+    }
+    console.log('🔍 TaskReassignmentModal: === END TASK ASSIGNEE EFFECT ===');
+  }, [task]);
+
+  // Load team members for the project
+  const loadTeamMembers = async () => {
+    try {
+      setLoadingTeamMembers(true);
+      console.log('TaskReassignmentModal: projectId =', projectId);
+      const members = await TeamService.getProjectTeamMembers(projectId);
+      console.log('TaskReassignmentModal: fetched team members =', members);
+      
+      if (members && members.length > 0) {
+        // Sort team members by role priority (highest first)
+        const sortedMembers = members.sort((a: TeamMember, b: TeamMember) => {
+          const priorityA = rolePriority[a.role as keyof typeof rolePriority] || 0;
+          const priorityB = rolePriority[b.role as keyof typeof rolePriority] || 0;
+          return priorityB - priorityA;
+        });
+        
+        setTeamMembers(sortedMembers);
+        console.log('✅ Loaded team members for reassignment:', sortedMembers.length);
+      } else {
+        console.log('⚠️ No team members found for reassignment');
+        setTeamMembers([]);
+      }
+    } catch (error) {
+      console.error('❌ Error loading team members for reassignment:', error);
+      setTeamMembers([]);
+    } finally {
+      setLoadingTeamMembers(false);
+    }
+  };
+
+  // Handle assignee selection
+  const handleAssigneeToggle = (userId: string) => {
+    setSelectedAssignees(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
+  // Get role color for display
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'lead': return COLORS.primary;
+      case 'admin': return COLORS.warning;
+      case 'editor': return COLORS.success;
+      case 'creator': return COLORS.secondary;
+      case 'viewer': return COLORS.grayscale700;
+      case 'vendor': return COLORS.tertiary;
+      case 'sponsor': return COLORS.info;
+      case 'fyi': return COLORS.grayscale400;
+      default: return COLORS.grayscale700;
+    }
+  };
+
+  // Get role display name
+  const getRoleDisplayName = (role: string) => {
+    switch (role) {
+      case 'lead': return 'Lead';
+      case 'admin': return 'Admin';
+      case 'editor': return 'Editor';
+      case 'creator': return 'Creator';
+      case 'viewer': return 'Viewer';
+      case 'vendor': return 'Vendor';
+      case 'sponsor': return 'Sponsor';
+      case 'fyi': return 'FYI';
+      default: return role;
+    }
+  };
+
+  // Handle reassignment
+  const handleReassign = async () => {
+    if (!task) return;
+    
+    try {
+      setLoading(true);
+      console.log('TaskReassignmentModal: Starting reassignment with assignees:', selectedAssignees);
+      
+      // Call the onReassign callback with the new assignee
+      onReassign(selectedAssignees);
+      
+      // Close modal
+      onClose();
+      
+    } catch (error) {
+      console.error('Error reassigning task:', error);
+      Alert.alert('Error', 'Failed to reassign task');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Render team member item for assignee selector
+  const renderTeamMemberItem = ({ item }: { item: TeamMember }) => {
+    const isSelected = selectedAssignees.includes(item.user_id);
+    const roleColor = getRoleColor(item.role);
+    const isCurrentUser = item.user_id === user?.id;
+    const isProjectOwner = item.role === 'creator';
+    return (
+      <TouchableOpacity
+        style={[styles.teamMemberItem, {
+          backgroundColor: isSelected 
+            ? (dark ? COLORS.primary + '20' : COLORS.primary + '10')
+            : (dark ? COLORS.dark3 : COLORS.grayscale100),
+          borderColor: isSelected ? COLORS.primary : 'transparent',
+        }]}
+        onPress={() => {
+          console.log('TaskReassignmentModal: Team member selected:', item.user_name, 'ID:', item.user_id);
+          handleAssigneeToggle(item.user_id);
+        }}
+        activeOpacity={0.7}
+        hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
+        accessibilityLabel={`Select ${item.user_name} for task assignment`}
+        accessibilityRole="button"
+      >
+        <View style={styles.teamMemberInfo}>
+          <UserAvatar 
+            userId={item.user_id}
+            size={32}
+          />
+          <View style={styles.teamMemberDetails}>
+            <View style={styles.nameContainer}>
+              <Text style={[styles.teamMemberName, {
+                color: dark ? COLORS.white : COLORS.greyscale900,
+              }]}> 
+                {item.user_name || 'Fetching name...'}
+              </Text>
+              {isCurrentUser && (
+                <View style={[styles.currentUserBadge, { backgroundColor: COLORS.primary }]}> 
+                  <Text style={styles.currentUserText}>You</Text>
+                </View>
+              )}
+            </View>
+            {/* Subtitle for Project Owner */}
+            {isProjectOwner && (
+              <Text style={{ fontSize: 12, color: COLORS.secondary, fontFamily: 'medium', marginBottom: 2 }}>
+                Project Owner
+              </Text>
+            )}
+            <View style={styles.roleContainer}>
+              <View style={[styles.roleBadge, { backgroundColor: roleColor + '20' }]}> 
+                <Text style={[styles.roleText, { color: roleColor }]}> 
+                  {getRoleDisplayName(item.role)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+        <View style={[styles.checkbox, {
+          backgroundColor: isSelected ? COLORS.primary : 'transparent',
+          borderColor: isSelected ? COLORS.primary : (dark ? COLORS.grayscale400 : COLORS.grayscale700),
+        }]}> 
+          {isSelected && (
+            <Ionicons name="checkmark" size={14} color={COLORS.white} />
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  console.log('🔍 TaskReassignmentModal: === RENDER DECISION POINT ===');
+  console.log('🔍 TaskReassignmentModal: Rendering modal, visible:', visible, 'task:', task?.title, 'projectId:', projectId);
+  console.log('🔍 TaskReassignmentModal: Platform:', Platform.OS);
+  console.log('🔍 TaskReassignmentModal: Modal visible prop:', visible);
+  console.log('🔍 TaskReassignmentModal: Task exists:', !!task);
+  console.log('🔍 TaskReassignmentModal: Task ID:', task?.id);
+  console.log('🔍 TaskReassignmentModal: ProjectId exists:', !!projectId);
+  console.log('🔍 TaskReassignmentModal: ProjectId value:', projectId);
+  console.log('🔍 TaskReassignmentModal: ProjectId trimmed:', projectId?.trim());
+
+  if (!visible) {
+    console.log('❌ TaskReassignmentModal: NOT RENDERING - visible is false');
+    console.log('❌ TaskReassignmentModal: === EARLY RETURN DUE TO VISIBLE ===');
+    return null;
+  }
+  
+  if (!task) {
+    console.log('❌ TaskReassignmentModal: NOT RENDERING - task is null/undefined');
+    console.log('❌ TaskReassignmentModal: === EARLY RETURN DUE TO TASK ===');
+    return null;
+  }
+  
+  if (!projectId || projectId.trim() === '') {
+    console.log('❌ TaskReassignmentModal: NOT RENDERING - projectId is empty:', projectId);
+    console.log('❌ TaskReassignmentModal: === EARLY RETURN DUE TO PROJECTID ===');
+    return null;
+  }
+
+  console.log('✅ TaskReassignmentModal: ALL CHECKS PASSED - About to render modal content');
+  console.log('✅ TaskReassignmentModal: === PROCEEDING TO RENDER ===');
+
+  console.log('🔍 TaskReassignmentModal: === STARTING MODAL RENDER ===');
+  console.log('🔍 TaskReassignmentModal: About to return Modal component');
+  console.log('🔍 TaskReassignmentModal: Modal props - visible:', visible, 'transparent:', true, 'animationType:', 'fade');
+  
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={() => {
+        console.log('🔍 TaskReassignmentModal: Modal onRequestClose called');
+        onClose();
+      }}
+      statusBarTranslucent={true}
+      presentationStyle="overFullScreen"
+      hardwareAccelerated={true}
+      supportedOrientations={['portrait', 'landscape']}
+      onShow={() => {
+        console.log('🔍 TaskReassignmentModal: Modal onShow called');
+        console.log('🔍 TaskReassignmentModal: Modal visible state:', visible);
+        console.log('🔍 TaskReassignmentModal: Platform:', Platform.OS);
+        console.log('🔍 TaskReassignmentModal: Modal should now be visible on screen');
+      }}
+      onDismiss={() => {
+        console.log('🔍 TaskReassignmentModal: Modal onDismiss called');
+        console.log('🔍 TaskReassignmentModal: Platform:', Platform.OS);
+      }}
+    >
+      <View style={styles.deleteModalOverlay}>
+        <TouchableOpacity
+          style={styles.deleteModalOverlayTouchable}
+          activeOpacity={1}
+          onPress={() => {
+            console.log('🔍 TaskReassignmentModal: Overlay pressed, closing modal');
+            onClose();
+          }}
+        />
+        <View style={[styles.deleteModalContainer, {
+          backgroundColor: dark ? COLORS.dark2 : COLORS.white,
+        }]}>
+          <View style={styles.deleteModalContentContainer}>
+            {(() => {
+              console.log('🔍 TaskReassignmentModal: === RENDERING MODAL CONTENT ===');
+              console.log('🔍 TaskReassignmentModal: Modal container style applied');
+              console.log('🔍 TaskReassignmentModal: Background color:', dark ? 'dark' : 'light');
+              return null;
+            })()}
+                          {/* Drag Handle */}
+              <View style={styles.dragHandle}>
+                {(() => {
+                  console.log('🔍 TaskReassignmentModal: Rendering drag handle');
+                  return null;
+                })()}
+                <View style={[styles.dragIndicator, {
+                  backgroundColor: dark ? COLORS.grayscale700 : COLORS.grayscale200,
+                }]} />
+              </View>
+
+                          <View style={[styles.modalContent, {
+                backgroundColor: dark ? COLORS.dark2 : COLORS.white,
+              }]}>
+                {(() => {
+                  console.log('🔍 TaskReassignmentModal: Rendering modal content container');
+                  console.log('🔍 TaskReassignmentModal: Team members count:', teamMembers.length);
+                  console.log('🔍 TaskReassignmentModal: Selected assignees count:', selectedAssignees.length);
+                  return null;
+                })()}
+              {/* Header */}
+              <View style={[styles.header, {
+                borderBottomColor: dark ? COLORS.grayscale700 : COLORS.grayscale200,
+              }]}>
+                <View style={styles.headerContent}>
+                  <View style={styles.headerLeft}>
+                    <Ionicons name="people" size={24} color={iconColors[4]} />
+                    <Text style={[styles.headerTitle, {
+                      color: dark ? COLORS.white : COLORS.greyscale900,
+                    }]}>
+                      Reassign Task
+                    </Text>
+                  </View>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      console.log('TaskReassignmentModal: Close button pressed');
+                      onClose();
+                    }} 
+                    style={styles.closeButton}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityLabel="Close reassignment modal"
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="close" size={24} color={dark ? COLORS.white : COLORS.greyscale900} />
+                  </TouchableOpacity>
+                </View>
+                
+                <Text style={[styles.taskTitle, {
+                  color: dark ? COLORS.white : COLORS.greyscale900,
+                }]}>
+                  {task.title}
+                </Text>
+                
+                <Text style={[styles.headerSubtitle, {
+                  color: dark ? COLORS.grayscale400 : COLORS.grayscale700,
+                }]}>
+                  Select team members to assign this task to
+                </Text>
+              </View>
+
+              {/* Current Assignees Section */}
+              {task.assigned_to && task.assigned_to.length > 0 && (
+                <View style={[styles.currentAssigneesSection, {
+                  borderBottomColor: dark ? COLORS.grayscale700 : COLORS.grayscale200,
+                }]}>
+                  <Text style={[styles.sectionTitle, {
+                    color: dark ? COLORS.white : COLORS.greyscale900,
+                  }]}>
+                    Currently Assigned
+                  </Text>
+                  <View style={styles.currentAssigneesList}>
+                    {selectedAssignees.map((userId: string, index: number) => {
+                      const member = teamMembers.find(m => m.user_id === userId);
+                      if (!member) return null;
+                      return (
+                        <View key={userId} style={[styles.currentAssigneeItem, {
+                          backgroundColor: dark ? COLORS.dark3 : COLORS.grayscale100,
+                        }]}>
+                          <UserAvatar 
+                            userId={userId}
+                            size={24}
+                          />
+                          <Text style={[styles.currentAssigneeName, {
+                            color: dark ? COLORS.white : COLORS.greyscale900,
+                          }]}>
+                            {member?.user_name || 'Fetching name...'}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
+
+              {/* Team Members List */}
+              <View style={styles.content}>
+                <Text style={[styles.sectionTitle, {
+                  color: dark ? COLORS.white : COLORS.greyscale900,
+                }]}>
+                  Select New Assignees
+                </Text>
+                
+                {loadingTeamMembers ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={COLORS.primary} />
+                    <Text style={[styles.loadingText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>
+                      Loading team members...
+                    </Text>
+                  </View>
+                ) : teamMembers.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Ionicons name="people-outline" size={48} color={COLORS.grayscale400} />
+                    <Text style={[styles.emptyText, { color: dark ? COLORS.white : COLORS.greyscale900 }]}>
+                      No team members found
+                    </Text>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={teamMembers}
+                    renderItem={renderTeamMemberItem}
+                    keyExtractor={(item) => item.user_id}
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={styles.teamMembersList}
+                  />
+                )}
+              </View>
+
+              {/* Footer */}
+              <View style={[styles.footer, Platform.OS === 'ios' && styles.footerIOS]}>
+                <TouchableOpacity
+                  style={[styles.cancelButton, {
+                    backgroundColor: dark ? COLORS.dark3 : COLORS.grayscale100,
+                    borderColor: dark ? COLORS.grayscale700 : COLORS.grayscale200,
+                  }]}
+                  onPress={() => {
+                    console.log('TaskReassignmentModal: Cancel button pressed');
+                    onClose();
+                  }}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel="Cancel task reassignment"
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.cancelButtonText, {
+                    color: dark ? COLORS.white : COLORS.greyscale900,
+                  }]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.reassignButton, { 
+                    backgroundColor: selectedAssignees.length > 0 ? COLORS.primary : COLORS.grayscale400,
+                  }]}
+                  onPress={() => {
+                    console.log('TaskReassignmentModal: Reassign button pressed with', selectedAssignees.length, 'assignees');
+                    handleReassign();
+                  }}
+                  disabled={loading || selectedAssignees.length === 0}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  accessibilityLabel={`Reassign task to ${selectedAssignees.length} team member${selectedAssignees.length !== 1 ? 's' : ''}`}
+                  accessibilityRole="button"
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color={COLORS.white} />
+                  ) : (
+                    <Text style={styles.reassignButtonText}>
+                      Reassign ({selectedAssignees.length})
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </View>
+      {(() => {
+        console.log('🔍 TaskReassignmentModal: === MODAL RENDER COMPLETE ===');
+        console.log('🔍 TaskReassignmentModal: Modal JSX structure completed');
+        return null;
+      })()}
+    </Modal>
+  );
+};
+
+const styles = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 9999,
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10000,
+  },
+  overlayTouchable: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  modalContainer: {
+    width: '92%',
+    maxHeight: '90%',
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 9999,
+    zIndex: 10001,
+  },
+
+  dragHandle: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  dragIndicator: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+  },
+  modalContentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  modalContent: {
+    flex: 1,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  header: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+  },
+
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontFamily: 'bold',
+    marginLeft: 12,
+  },
+  closeButton: {
+    padding: 4,
+  },
+  taskTitle: {
+    fontSize: 16,
+    fontFamily: 'semiBold',
+    marginBottom: 8,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    fontFamily: 'regular',
+  },
+  currentAssigneesSection: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontFamily: 'semiBold',
+    marginBottom: 12,
+  },
+  currentAssigneesList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  currentAssigneeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  currentAssigneeName: {
+    fontSize: 12,
+    fontFamily: 'medium',
+    marginLeft: 6,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  teamMembersList: {
+    paddingBottom: 16,
+  },
+  teamMemberItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+  },
+  teamMemberInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  teamMemberDetails: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  nameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  teamMemberName: {
+    fontSize: 16,
+    fontFamily: 'medium',
+  },
+  currentUserBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  currentUserText: {
+    fontSize: 10,
+    fontFamily: 'bold',
+    color: COLORS.white,
+  },
+  roleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  roleText: {
+    fontSize: 12,
+    fontFamily: 'medium',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderRadius: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontFamily: 'regular',
+    marginTop: 12,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontFamily: 'regular',
+    marginTop: 12,
+  },
+  footer: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.grayscale200,
+    gap: 12,
+  },
+  footerIOS: {
+    paddingBottom: 34, // Account for iOS home indicator
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontFamily: 'medium',
+  },
+  reassignButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reassignButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontFamily: 'bold',
+  },
+  // Modal overlay styles (matching delete confirmation modal)
+  deleteModalOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'flex-end',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+  },
+  deleteModalOverlayTouchable: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  deleteModalContainer: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    width: '100%',
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 999999,
+    zIndex: 10000,
+  },
+  deleteModalContentContainer: {
+    flex: 1,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+});
+
+export default TaskReassignmentModal; 

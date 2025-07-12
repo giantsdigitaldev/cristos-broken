@@ -1,0 +1,117 @@
+{
+  "summary": {
+    "startTime": "2025-07-02T11:28:08.661Z",
+    "endTime": "2025-07-02T11:30:00.872Z",
+    "totalDuration": "112s",
+    "totalTests": 8,
+    "passedTests": 0,
+    "failedTests": 8,
+    "successRate": "0%"
+  },
+  "testDetails": [
+    {
+      "name": "Authentication & User Setup",
+      "passed": false,
+      "duration": 4006,
+      "error": "No element found for selector: input[placeholder*=\"email\" i], input[type=\"email\"]",
+      "timestamp": "2025-07-02T11:28:16.728Z"
+    },
+    {
+      "name": "Project Management",
+      "passed": false,
+      "duration": 5204,
+      "error": "No element found for selector: input[name=\"name\"], input[placeholder*=\"project name\"]",
+      "timestamp": "2025-07-02T11:28:21.933Z"
+    },
+    {
+      "name": "Team Collaboration",
+      "passed": false,
+      "duration": 5193,
+      "error": "No element found for selector: input[placeholder*=\"search\" i], input[name=\"search\"]",
+      "timestamp": "2025-07-02T11:28:27.126Z"
+    },
+    {
+      "name": "Task Management",
+      "passed": false,
+      "duration": 5322,
+      "error": "No element found for selector: input[name=\"title\"], input[placeholder*=\"task title\"]",
+      "timestamp": "2025-07-02T11:28:32.449Z"
+    },
+    {
+      "name": "Communication Features",
+      "passed": false,
+      "duration": 6032,
+      "error": "No element found for selector: textarea[name=\"comment\"], textarea[placeholder*=\"comment\"]",
+      "timestamp": "2025-07-02T11:28:38.482Z"
+    },
+    {
+      "name": "File Management",
+      "passed": false,
+      "duration": 37481,
+      "error": "Waiting for `FileChooser` failed: 30000ms exceeded",
+      "timestamp": "2025-07-02T11:29:15.964Z"
+    },
+    {
+      "name": "Advanced Features",
+      "passed": false,
+      "duration": 3294,
+      "error": "No element found for selector: input[name=\"query\"], input[placeholder*=\"search\"]",
+      "timestamp": "2025-07-02T11:29:19.258Z"
+    },
+    {
+      "name": "Cleanup & Validation",
+      "passed": false,
+      "duration": 41613,
+      "error": "Waiting for selector `.success-message, .toast-success` failed: Waiting failed: 30000ms exceeded",
+      "timestamp": "2025-07-02T11:30:00.872Z"
+    }
+  ],
+  "errors": [
+    {
+      "test": "Authentication & User Setup",
+      "error": "No element found for selector: input[placeholder*=\"email\" i], input[type=\"email\"]"
+    },
+    {
+      "test": "Project Management",
+      "error": "No element found for selector: input[name=\"name\"], input[placeholder*=\"project name\"]"
+    },
+    {
+      "test": "Team Collaboration",
+      "error": "No element found for selector: input[placeholder*=\"search\" i], input[name=\"search\"]"
+    },
+    {
+      "test": "Task Management",
+      "error": "No element found for selector: input[name=\"title\"], input[placeholder*=\"task title\"]"
+    },
+    {
+      "test": "Communication Features",
+      "error": "No element found for selector: textarea[name=\"comment\"], textarea[placeholder*=\"comment\"]"
+    },
+    {
+      "test": "File Management",
+      "error": "Waiting for `FileChooser` failed: 30000ms exceeded"
+    },
+    {
+      "test": "Advanced Features",
+      "error": "No element found for selector: input[name=\"query\"], input[placeholder*=\"search\"]"
+    },
+    {
+      "test": "Cleanup & Validation",
+      "error": "Waiting for selector `.success-message, .toast-success` failed: Waiting failed: 30000ms exceeded"
+    }
+  ],
+  "screenshots": [
+    "./screenshots/2025-07-02T11-28-16-555Z-registration-page-1.png",
+    "./screenshots/2025-07-02T11-28-21-833Z-new-project-page.png",
+    "./screenshots/2025-07-02T11-28-26-962Z-team-invitation-page.png",
+    "./screenshots/2025-07-02T11-28-32-288Z-new-task-form.png",
+    "./screenshots/2025-07-02T11-28-38-353Z-project-comments.png",
+    "./screenshots/2025-07-02T11-28-45-869Z-file-upload-page.png",
+    "./screenshots/2025-07-02T11-29-19-153Z-search-page.png"
+  ],
+  "recommendations": [
+    "Fix failing tests before deployment",
+    "Address critical errors in authentication and data management",
+    "Conduct thorough manual testing before release"
+  ]
+}
